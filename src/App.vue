@@ -175,6 +175,18 @@ onMounted(async () => {
                 <option v-for="c in store.availableCircs" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
+
+            <div v-if="store.filters.circ !== 'TOUTES' || store.filters.bassin !== 'TOUS' || true">
+              <label class="block text-xs font-bold text-slate-700 mb-1">PAS</label>
+              <select 
+                :value="store.filters.pas" 
+                @change="store.setFilter('pas', ($event.target as HTMLSelectElement).value)"
+                class="w-full text-sm border-slate-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="TOUS">Tous les PAS</option>
+                <option v-for="p in store.availableFilterPas" :key="p" :value="p">{{ p }}</option>
+              </select>
+            </div>
           </div>
         </div>
 

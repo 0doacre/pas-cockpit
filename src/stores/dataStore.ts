@@ -16,7 +16,7 @@ export const useDataStore = defineStore('data', () => {
     const schools = ref<School[]>([]);
     const sectorsGeoJson = ref<any>(null); // GeoJSON from KML
     const rhData = ref<Map<string, RhData>>(new Map());
-    const filters = ref<DataFilters>({ bassin: 'TOUS', circ: 'TOUTES' });
+    const filters = ref<DataFilters>({ bassin: 'TOUS', circ: 'TOUTES', pas: 'TOUS' });
     const searchQuery = ref('');
     const selectedPas = ref<string | null>(null);
     const selectedSchool = ref<School | null>(null);
@@ -42,6 +42,17 @@ export const useDataStore = defineStore('data', () => {
         return [...new Set(list.map(s => s.Circonscription).filter(Boolean))].sort();
     });
 
+    const availableFilterPas = computed(() => {
+        let list = schools.value;
+        if (filters.value.bassin !== 'TOUS') {
+            list = list.filter(s => s.Bassin === filters.value.bassin);
+        }
+        if (filters.value.circ !== 'TOUTES') {
+            list = list.filter(s => s.Circonscription === filters.value.circ);
+        }
+        return [...new Set(list.map(s => s['Nom du PAS']).filter(Boolean))].sort();
+    });
+
     const filteredSchools = computed(() => {
         return schools.value.filter(s => {
             // 1. Text Search
@@ -57,6 +68,7 @@ export const useDataStore = defineStore('data', () => {
             // 2. Filters
             if (filters.value.bassin !== 'TOUS' && s.Bassin !== filters.value.bassin) return false;
             if (filters.value.circ !== 'TOUTES' && s.Circonscription !== filters.value.circ) return false;
+            if (filters.value.pas !== 'TOUS' && s['Nom du PAS'] !== filters.value.pas) return false;
 
             return true;
         });
@@ -255,7 +267,13 @@ export const useDataStore = defineStore('data', () => {
     function setFilter(key: keyof DataFilters, value: string) {
         filters.value[key] = value;
         // Reset selection if filter changes to avoid confusion
-        if (key === 'bassin') filters.value.circ = 'TOUTES';
+        if (key === 'bassin') {
+            filters.value.circ = 'TOUTES';
+            filters.value.pas = 'TOUS';
+        }
+        if (key === 'circ') {
+            filters.value.pas = 'TOUS';
+        }
         selectedPas.value = null;
         selectedSchool.value = null;
     }
@@ -326,6 +344,7 @@ export const useDataStore = defineStore('data', () => {
         loadFromStorage,
         resetData,
         renameSchool,
-        exportToCsv
+        exportToCsv,
+        availableFilterPas
     };
 });

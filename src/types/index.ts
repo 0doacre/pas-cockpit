@@ -34,6 +34,7 @@ export interface PasMetric {
 export interface DataFilters {
     bassin: string;
     circ: string;
+    pas: string;
 }
 
 export interface SimulationConfig {
