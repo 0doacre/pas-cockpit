@@ -1,6 +1,7 @@
 import Papa from 'papaparse';
 
 export interface RhData {
+    uai: string;
     circonscription: string;
     pas: string;
     mail: string;
@@ -18,40 +19,45 @@ export interface RhData {
 
 export async function loadRhData(): Promise<Map<string, RhData>> {
     try {
-        const response = await fetch(`${import.meta.env.BASE_URL}synoptique.csv`);
+        const response = await fetch(`${import.meta.env.BASE_URL}data/data.csv`);
         const text = await response.text();
 
         return new Promise((resolve, reject) => {
             Papa.parse(text, {
-                delimiter: ';',
+                header: true,
                 skipEmptyLines: true,
-                complete: (results) => {
+                complete: (results: any) => {
                     const rhMap = new Map<string, RhData>();
 
-                    // Skip header rows (first 4 lines based on file structure)
-                    const dataRows = results.data.slice(4);
+                    results.data.forEach((row: any) => {
+                        const pasName = row['Nom du PAS']?.trim();
+                        if (!pasName || pasName === 'A définir') return;
 
-                    dataRows.forEach((row: any) => {
-                        if (row.length < 2 || !row[1]) return; // Skip if no PAS name
-
-                        const pasName = row[1].trim();
-                        if (pasName === 'A définir' || !pasName) return;
-
-                        rhMap.set(pasName, {
-                            circonscription: row[0]?.trim() || '',
-                            pas: pasName,
-                            mail: row[2]?.trim() || '',
-                            location: row[3]?.trim() || '',
-                            coord: row[5]?.trim() || '',
-                            phone: row[6]?.trim() || '',
-                            educ: row[7]?.trim() || '',
-                            aesh: row[8]?.trim() || '',
-                            dacs: row[9]?.trim() || '',
-                            pilot2d: row[10]?.trim() || '',
-                            pilot1d: row[11]?.trim() || '',
-                            pilotEsms: row[12]?.trim() || '',
-                            partner: row[13]?.trim() || ''
-                        });
+                        // Only map if not already present (or overwrite?) - usually 1 per PAS?
+                        // Actually the CSV has lines per SCHOOL.
+                        // We need 1 entry per PAS for the RH "card".
+                        // Use the First finding or filter for something specific?
+                        // Assuming all schools in a PAS share the formatted RH info?
+                        // Or maybe we pick the "Tête de pont"?
+                        // For now, simple overwrite or keep first.
+                        if (!rhMap.has(pasName)) {
+                            rhMap.set(pasName, {
+                                uai: row['UAI'] || '',
+                                circonscription: row['Circonscription']?.trim() || '',
+                                pas: pasName,
+                                mail: row['Mail']?.trim() || '',
+                                location: `${row['Adresse'] || ''} ${row['Code Postal'] || ''} ${row['Ville'] || ''}`.trim(),
+                                coord: `${row['Latitude'] || ''},${row['Longitude'] || ''}`,
+                                phone: row['Téléphone']?.trim() || '',
+                                educ: row['Education prioritaire (Archipel)']?.trim() || '',
+                                aesh: '', // Missing in new CSV
+                                dacs: '', // Missing in new CSV
+                                pilot2d: '', // Missing in new CSV
+                                pilot1d: '', // Missing in new CSV
+                                pilotEsms: '', // Missing in new CSV
+                                partner: '' // Missing in new CSV
+                            });
+                        }
                     });
 
                     resolve(rhMap);

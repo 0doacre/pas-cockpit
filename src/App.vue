@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useDataStore } from './stores/dataStore';
-import { parseDataCsv, parseKml } from './services/dataLoader';
+import { parseDataCsv } from './services/dataLoader';
 import { loadRhData } from './services/rhLoader';
+import { sectorService } from './services/sectorService';
 import { downloadCsv } from './utils/exportUtils';
 import AppLayout from './components/layout/AppLayout.vue';
 import LeafletMap from './components/map/LeafletMap.vue';
@@ -14,10 +15,16 @@ import PilotageView from './components/pilotage/PilotageView.vue';
 
 const store = useDataStore();
 
+// Panel visibility state
+const isMapVisible = ref(true);
+const isKanbanVisible = ref(true);
+
 const handleExport = () => {
-    const dateStr = new Date().toISOString().slice(0,10);
-    downloadCsv(store.schools, `Maillage_PAS_${dateStr}.csv`);
-    store.hasUnsavedChanges = false;
+    if (typeof store.exportToCsv === 'function') {
+        store.exportToCsv();
+    } else {
+        downloadCsv(store.schools, `data.csv`);
+    }
 };
 
 const handleSave = async () => {
@@ -51,7 +58,7 @@ onMounted(async () => {
     
     if (!hasSavedData) {
         // 2. Fallback to CSV if no saved data
-        const response = await fetch(`${import.meta.env.BASE_URL}data.csv`);
+        const response = await fetch(`${import.meta.env.BASE_URL}data/data.csv`);
         if (response.ok) {
             const csvText = await response.text();
             const data = await parseDataCsv(csvText);
@@ -59,13 +66,10 @@ onMounted(async () => {
         }
     }
     
-    // Load Boundary (stays the same, usually not modified by user)
-    const kmlResponse = await fetch(`${import.meta.env.BASE_URL}secteurs.kml`);
-    if (kmlResponse.ok) {
-        const kmlText = await kmlResponse.text();
-        const geojson = parseKml(kmlText);
-        store.setSectorsGeoJson(geojson);
-    }
+    // Load Sectors (Colleges and Circo)
+    await sectorService.loadSectors();
+    // Set College Sectors into store for map usage
+    store.setSectorsGeoJson(sectorService.getAllCollegeSectors());
     
     // Load RH data
     const rhMap = await loadRhData();
@@ -114,10 +118,10 @@ onMounted(async () => {
       <button 
         @click="handleExport"
         class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-bold shadow hover:bg-blue-700 transition-colors flex items-center gap-2"
-        title="Exporter en CSV"
+        title="Télécharger le fichier CSV (data.csv) pour mise à jour sur GitHub"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-        <span>Export</span>
+        <span>Télécharger CSV</span>
       </button>
       <div class="h-6 w-px bg-slate-200 mx-1"></div>
       <button 
@@ -183,18 +187,61 @@ onMounted(async () => {
 
     <template #main>
       <div v-if="store.currentView === 'MAP'" class="w-full h-full flex flex-col">
-        <!-- Top Half: Map -->
-        <div class="h-1/2 border-b border-slate-300 relative">
-          <LeafletMap />
-          
-          <div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded shadow text-xs font-bold z-[400]">
+        <!-- Top: Map (collapsible) -->
+        <div 
+          class="relative transition-all duration-300 ease-in-out border-b border-slate-300"
+          :class="isMapVisible ? 'flex-1 min-h-[200px]' : 'h-10'"
+        >
+          <!-- Map Toggle Header -->
+          <div 
+            class="absolute top-0 left-0 right-0 h-10 bg-slate-50 border-b border-slate-200 flex items-center justify-between px-3 z-[500] cursor-pointer"
+            @click="isMapVisible = !isMapVisible"
+          >
+            <span class="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg>
+              Carte
+            </span>
+            <button class="p-1 rounded hover:bg-slate-200 text-slate-400">
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                :class="isMapVisible ? 'rotate-180' : ''"
+                class="transition-transform"
+              ><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+          <div v-show="isMapVisible" class="h-full pt-10">
+            <LeafletMap />
+          </div>
+          <div v-show="isMapVisible" class="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded shadow text-xs font-bold z-[400]">
             {{ store.filteredSchools.length }} écoles
           </div>
         </div>
         
-        <!-- Bottom Half: Kanban -->
-        <div class="h-1/2 bg-slate-100 overflow-hidden">
-          <PasBoard />
+        <!-- Bottom: Kanban (collapsible) -->
+        <div 
+          class="bg-slate-100 overflow-hidden transition-all duration-300 ease-in-out"
+          :class="isKanbanVisible ? 'flex-1 min-h-[200px]' : 'h-10'"
+        >
+          <!-- Kanban Toggle Header -->
+          <div 
+            class="h-10 bg-slate-50 border-b border-slate-200 flex items-center justify-between px-3 cursor-pointer"
+            @click="isKanbanVisible = !isKanbanVisible"
+          >
+            <span class="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+              Liste des PAS
+            </span>
+            <button class="p-1 rounded hover:bg-slate-200 text-slate-400">
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                :class="isKanbanVisible ? '' : 'rotate-180'"
+                class="transition-transform"
+              ><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+          <div v-show="isKanbanVisible" class="h-[calc(100%-40px)]">
+            <PasBoard />
+          </div>
         </div>
       </div>
       <div v-else class="w-full h-full bg-white">

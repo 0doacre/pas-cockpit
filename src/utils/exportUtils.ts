@@ -1,29 +1,23 @@
 import Papa from 'papaparse';
 import type { School } from '../types';
 
-export const downloadCsv = (schools: School[], filename: string = 'nouveau_maillage.csv') => {
-    // 1. Prepare data for export (Excel French format compatibility)
+export const downloadCsv = (schools: School[], filename: string = 'data.csv') => {
+    // 1. Prepare data for export
     const csvData = schools.map(s => {
         // Clone to avoid mutating the store types for export formatting
         const row: any = { ...s };
 
-        // Format numbers with comma for French Excel if needed
-        if (typeof row.IPS === 'number') {
-            row.IPS = row.IPS.toString().replace('.', ',');
-        }
-        if (typeof row["Indice d'éloignement"] === 'number') {
-            row["Indice d'éloignement"] = row["Indice d'éloignement"].toString().replace('.', ',');
-        }
-
-        // Ensure PAS is the current one (it is already in store, but good to be explicit if we had separate state)
-        // row['Nom du PAS'] = s['Nom du PAS']; 
+        // We don't want to convert numbers to strings with commas because 
+        // the loader expects standard numbers/dots and the original CSV uses dots.
+        // Also, we should remove any runtime-only fields if we added any.
+        delete row['Distance (km)'];
 
         return row;
     });
 
     // 2. Convert to CSV
     const csvString = Papa.unparse(csvData, {
-        delimiter: ";", // Semicolon for French Excel
+        delimiter: ",", // Comma to match original data.csv
         header: true
     });
 

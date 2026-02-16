@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import localforage from 'localforage';
 import type { School, DataFilters } from '../types';
 import type { RhData } from '../services/rhLoader';
+import { downloadCsv } from '../utils/exportUtils';
 
 // Configure localforage
 localforage.config({
@@ -284,6 +285,10 @@ export const useDataStore = defineStore('data', () => {
         rhData.value = data;
     }
 
+    function exportToCsv() {
+        downloadCsv(schools.value, 'data.csv');
+    }
+
     return {
         schools,
         sectorsGeoJson,
@@ -320,6 +325,7 @@ export const useDataStore = defineStore('data', () => {
         saveData,
         loadFromStorage,
         resetData,
-        renameSchool
+        renameSchool,
+        exportToCsv
     };
 });
