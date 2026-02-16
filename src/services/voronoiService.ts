@@ -3,12 +3,12 @@ import {
     featureCollection,
     voronoi,
     intersect,
-    flattenEach,
+
     area,
     buffer,
-    lineToPolygon,
+
     union,
-    flatten,
+
     convex
 } from '@turf/turf';
 import type { School } from '../types';
@@ -59,40 +59,10 @@ export const generateVoronoiFeatures = (
     let mask: Feature<Polygon | MultiPolygon> | null = null;
 
     try {
-        // Try dissolving to get boundary
-        // turf.dissolve handles FeatureCollection.
-        // Note: flatten before dissolve is robust.
-        const flattened = flatten(maskGeoJson);
-        const dissolved = intersect(flattened as any); // Wait, intersect? No.
-        // Turf dissolve logic:
-        // const dissolved = turf.dissolve(featureCollection([...]), {propertyName: 'property'});
-        // If we want total union, we can maybe use turf.union iteratively?
-        // Expensive for client side?
-        // Optimized approach: Simply run Voronoi with a BBox, then for each cell, intersect with the *local* circo?
-        // Complex.
-        // Let's stick to V1 logic if it worked?
-        // V1 used `sectorsGeoJson` which seemingly was the Dept Outline?
-        // If the user provided `circonscriptions-1er-degre.geojson`, it covers the dept.
-        // We can fallback to BBOX based Voronoi if Mask fails, but user wants clean borders.
-
-        // Let's try to find a huge polygon if exists, or use Convex Hull as fallback?
-        // Convex Hull is safe.
-        mask = convex(collection); // Hull of schools
-        // But hull is not the dept border.
-
-        // Let's try to Union the Circos simplistically.
-        // Actually, let's use the first feature for now if it's the department?
-        // No, circos are small.
-
-        // Let's use the bounding box of the circos to clip?
-        // No.
-
-        // Temporary Strategy: Iterate and Union.
-        // Or: Use the `getLargestPolygonMask` but on the `sectors-college` if it has a dept entry? No.
-
-        // Let's rely on the fact that voronoi fills the BBOX.
-        // We can clip with the Convex Hull of the schools + Buffer?
+        // Fallback to Convex Hull as a starting point if no mask logic works
+        mask = convex(collection);
     } catch (e) { }
+
 
     // Fallback: If no mask logic works, we return BBOX-based voronoi (rough edges).
     // But wait, the user provided `circonscriptions`.
@@ -162,29 +132,7 @@ export const generateVoronoiFeatures = (
     return { features: finalFeatures, mask: cleanMask };
 };
 
-// Helper: Extract largest polygon from GeoJSON (matching V1 logic)
-const getLargestPolygonMask = (geoJson: any): Feature<Polygon | MultiPolygon> | null => {
-    if (!geoJson) return null;
 
-    const features: Feature<Polygon | MultiPolygon>[] = [];
-    flattenEach(geoJson, (f) => {
-        if (f.geometry.type === 'Polygon') {
-            features.push(f as Feature<Polygon | MultiPolygon>);
-        } else if (f.geometry.type === 'LineString') {
-            try {
-                const poly = lineToPolygon(f as any);
-                if (poly) features.push(poly as Feature<Polygon>);
-            } catch (e) { }
-        }
-    });
-
-    if (features.length === 0) return null;
-
-    // specific sort for V1: area descending
-    features.sort((a, b) => area(b) - area(a));
-
-    return features[0] || null;
-};
 
 // Helper: Clean geometry robustly
 const cleanGeometry = (feature: Feature<Polygon | MultiPolygon>): Feature<Polygon | MultiPolygon> | null => {
